@@ -770,10 +770,15 @@
           }
           input.classList.remove('bad');
 
-          /* 가르기 칸은 한 자리이므로 첫 칸 입력 뒤 두 번째 칸으로 자동 이동 */
+          /* 가르기 칸은 한 자리입니다.
+             첫 칸을 입력하면 두 번째 칸으로 자동 이동하고,
+             두 번째 칸까지 입력되면 별도 확인 버튼 없이 즉시 자동 확인합니다. */
           if(input.dataset.role==='splitA' && input.value.length>=1){
             const next=this.el('work').querySelector('[data-role="splitB"]');
             if(next && !next.classList.contains('hidden'))this.setActiveInput(next);
+          }else if(input.dataset.role==='splitB' && /^\d$/.test(key) && input.value.length>=1){
+            const first=this.el('work').querySelector('[data-role="splitA"]');
+            if(first && first.value.trim()!=='') this.checkSplit();
           }
         }
 
@@ -813,7 +818,7 @@
           this.q={first,complement,second,rest,answer:first+second};
 
           this.el('instruction').innerHTML=`문제 ${this.solved+1} · <strong>${first} + ${second}</strong>`;
-          this.el('subhint').textContent='아래 숫자 키패드로 입력해요. 원래 식의 자리는 그대로 두어요.';
+          this.el('subhint').textContent='두 수를 입력하면 자동으로 확인돼요. 원래 식의 자리는 그대로 두어요.';
           this.el('work').innerHTML=`
             <div class="carry-work" data-role="carryWork">
               <div class="fixed-equation" data-role="carryEq">
@@ -843,7 +848,8 @@
               </div>
             </div>`;
 
-          this.el('actions').innerHTML=`<button class="action-btn" data-role="checkSplit">가르기 확인</button>`;
+          this.el('actions').innerHTML='';
+          this.el('actions').classList.add('hidden');
           const work=this.el('work');
           const a=work.querySelector('[data-role="splitA"]');
           const b=work.querySelector('[data-role="splitB"]');
@@ -852,7 +858,6 @@
           this.bindNumericInput(b,1);
           this.bindNumericInput(finalAnswer,2);
           finalAnswer.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkFinal()});
-          bindFastTap(this.el('actions').querySelector('[data-role="checkSplit"]'),()=>this.checkSplit());
           a.addEventListener('keydown',e=>{if(e.key==='Enter')b.focus()});
           b.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkSplit()});
           requestAnimationFrame(()=>this.drawCarryGuide());
@@ -951,6 +956,7 @@
           bValue.classList.remove('hidden');
 
           answer.disabled=false;
+          this.el('actions').classList.remove('hidden');
           this.el('actions').innerHTML=`<button class="action-btn" data-role="checkAnswer">정답 확인</button>`;
           bindFastTap(this.el('actions').querySelector('[data-role="checkAnswer"]'),()=>this.checkFinal());
           this.setMessage(`${this.q.second}는 흔적만 남기고, ${this.q.complement}와 ${this.q.rest}(으)로 갈랐어요. ${this.q.first}와 ${this.q.complement}가 10의 짝꿍이에요.`, 'good');
@@ -985,6 +991,7 @@
               <div class="fixed-equation" data-role="pairEq">${parts.join('')}</div>
             </div>`;
           this.el('actions').innerHTML='';
+          this.el('actions').classList.add('hidden');
 
           const work=this.el('work');
           const finalAnswer=work.querySelector('[data-role="finalAnswer"]');
@@ -1019,6 +1026,7 @@
               this.phase='answer';
               const answer=this.el('work').querySelector('[data-role="finalAnswer"]');
               answer.disabled=false;
+              this.el('actions').classList.remove('hidden');
               this.el('actions').innerHTML=`<button class="action-btn" data-role="checkAnswer">정답 확인</button>`;
               bindFastTap(this.el('actions').querySelector('[data-role="checkAnswer"]'),()=>this.checkFinal());
               this.setMessage('좋아요! 원래 식은 그대로 두고, 10이 되는 두 수만 표시했어요.','good');
@@ -1120,7 +1128,7 @@
                   el.value='';
                   el.classList.remove('bad');
                 });
-                this.setMessage('다시 가르기를 해보세요.','info');
+                this.setMessage('다시 두 수를 입력해보세요. 두 번째 수까지 넣으면 자동 확인돼요.','info');
                 if(a)this.setActiveInput(a);
                 return;
               }
