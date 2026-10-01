@@ -48,6 +48,19 @@
     .fullscreen-btn{background:#0f172a;color:#fff;box-shadow:0 4px 0 #020617}
     .start-btn.pressed,.start-btn:active,.fullscreen-btn.pressed,.fullscreen-btn:active{transform:translateY(2px);box-shadow:none;filter:brightness(.96)}
 
+    .timer-display{
+      display:flex;align-items:center;justify-content:center;gap:6px;
+      min-width:104px;min-height:48px;padding:7px 12px;border-radius:12px;
+      background:#0f172a;color:#fff;font-size:22px;font-weight:1000;
+      font-variant-numeric:tabular-nums;letter-spacing:.5px;box-shadow:0 3px 0 #020617;
+      white-space:nowrap;
+    }
+    .timer-display::before{content:'⏱';font-size:17px}
+    .timer-display.warning{background:#b45309;box-shadow:0 3px 0 #78350f}
+    .timer-display.danger{background:#dc2626;box-shadow:0 3px 0 #991b1b;animation:timerPulse .75s ease-in-out infinite alternate}
+    @keyframes timerPulse{from{transform:scale(1)}to{transform:scale(1.045)}}
+    .settings select:disabled,.settings button:disabled{opacity:.5;cursor:not-allowed}
+
     .mobile-tip{display:none;text-align:center;font-size:12px;color:var(--muted);font-weight:800;margin:2px 0 8px}
 
     .game-board{
@@ -281,6 +294,19 @@
     .game-board[data-count="5"] .key-btn.utility{font-size:12px}
 
 
+    .countdown-screen{
+      min-height:calc(100vh - 92px);display:flex;align-items:center;justify-content:center;
+      background:#fff;border:2px solid #e2e8f0;border-radius:18px;box-shadow:var(--shadow);
+    }
+    .countdown-number{
+      width:150px;height:150px;border-radius:50%;display:grid;place-items:center;
+      background:var(--blue);color:#fff;font-size:92px;font-weight:1000;
+      box-shadow:0 10px 0 #1d4ed8,0 18px 36px rgba(37,99,235,.22);
+    }
+    .player-panel.time-up{border-color:#fca5a5;background:linear-gradient(#fff,#fff1f2)}
+    .time-up-title{font-size:clamp(22px,2.6vw,34px);font-weight:1000;color:#dc2626;margin:8px 0}
+    .time-up-score{font-size:clamp(18px,2vw,28px);font-weight:1000;color:#172033;margin-top:6px}
+
     body.fullscreen-mode .app{padding:3px}
     body.fullscreen-mode .topbar{padding:5px 7px;margin-bottom:3px}
     body.fullscreen-mode .brand p{display:none}
@@ -317,6 +343,7 @@
       .mode-select{max-width:190px}
       .setting-select{min-width:76px}
       .start-btn,.reset-all-btn,.fullscreen-btn{padding:9px 11px;font-size:13px}
+      .timer-display{min-width:94px;min-height:44px;font-size:19px;padding:6px 9px}
       .game-board{display:flex!important;overflow-x:auto;scroll-snap-type:x mandatory;gap:7px;padding-bottom:8px}
       .player-panel{flex:0 0 calc(100vw - 20px)!important;min-height:calc(100vh - 195px);scroll-snap-align:center;border-radius:15px}
       .mobile-tip{display:block!important}
@@ -339,7 +366,7 @@
     <header class="topbar">
       <div class="brand">
         <h1>10의 짝꿍수 덧셈 · 전자칠판용</h1>
-        <p>문제는 키패드 바로 위, 터치 버튼은 아래쪽에 배치했어요.</p>
+        <p>4명이 함께 1분 동안 도전해요. 시작 후 3초 뒤에 문제가 나타납니다.</p>
       </div>
 
       <div class="settings">
@@ -354,10 +381,10 @@
         <div class="setting-group">
           <span class="setting-label">인원</span>
           <select class="setting-select" id="playerSelect" aria-label="인원 선택">
-            <option value="1" selected>1명</option>
+            <option value="1">1명</option>
             <option value="2">2명</option>
             <option value="3">3명</option>
-            <option value="4">4명</option>
+            <option value="4" selected>4명</option>
             <option value="5">5명</option>
           </select>
         </div>
@@ -372,6 +399,16 @@
           </select>
         </div>
 
+        <div class="setting-group">
+          <span class="setting-label">시간</span>
+          <select class="setting-select" id="timerSelect" aria-label="제한 시간 선택">
+            <option value="60" selected>1분</option>
+            <option value="120">2분</option>
+            <option value="180">3분</option>
+          </select>
+        </div>
+
+        <div class="timer-display" id="timerDisplay" aria-live="polite">01:00</div>
         <button class="start-btn" id="startBtn">시작</button>
         <button class="reset-all-btn" id="resetAllBtn">전체 처음부터</button>
         <button class="fullscreen-btn" id="fullscreenBtn">전체화면</button>
@@ -379,7 +416,7 @@
     </header>
 
     <div class="mobile-tip" id="mobileTip">여러 명일 때는 화면을 좌우로 밀어 각자 화면을 볼 수 있어요.</div>
-    <section class="game-board" id="gameBoard" data-count="1" style="--players:1"></section>
+    <section class="game-board" id="gameBoard" data-count="4" style="--players:4"></section>
   </main>
 
   <script>
@@ -395,10 +432,16 @@
         return a;
       };
 
-      let playerCount=1;
+      let playerCount=4;
       let goal=10;
       let mode='pair';
+      let roundSeconds=60;
+      let timeRemaining=60;
       let games=[];
+      let countdownInterval=null;
+      let gameTimerInterval=null;
+      let roundRunning=false;
+
 
       let audioCtx=null;
       function tone(freq,duration=.1,type='sine',delay=0,gain=.035){
@@ -416,6 +459,9 @@
       const soundBad=()=>{tone(170,.12,'square',0,.02);tone(125,.16,'square',.12,.018)};
       const soundDone=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,.13,'sine',i*.09,.035))};
       const soundStart=()=>{tone(440,.08,'sine',0,.03);tone(660,.1,'sine',.09,.03)};
+      const soundCount=()=>tone(520,.11,'sine',0,.04);
+      const soundTimeUp=()=>{tone(220,.18,'square',0,.025);tone(165,.28,'square',.2,.022)};
+
 
       function updateMobileTip(){
         const tip=$('mobileTip');
@@ -449,11 +495,141 @@
         });
       }
 
+      function formatTime(totalSeconds){
+        const sec=Math.max(0,Number(totalSeconds)||0);
+        const m=Math.floor(sec/60);
+        const s=sec%60;
+        return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+
+      function updateTimerDisplay(){
+        const display=$('timerDisplay');
+        if(!display)return;
+        display.textContent=formatTime(timeRemaining);
+        display.classList.toggle('danger',roundRunning && timeRemaining<=10);
+        display.classList.toggle('warning',roundRunning && timeRemaining>10 && timeRemaining<=30);
+      }
+
+      function setSettingsLocked(locked){
+        ['modeSelect','playerSelect','goalSelect','timerSelect'].forEach(id=>{
+          const el=$(id); if(el)el.disabled=locked;
+        });
+        const start=$('startBtn');
+        if(start){
+          start.disabled=locked;
+          start.textContent=locked?(countdownInterval?'준비 중':'진행 중'):'시작';
+        }
+      }
+
+      function stopRoundTimers(){
+        if(countdownInterval){clearInterval(countdownInterval);countdownInterval=null;}
+        if(gameTimerInterval){clearInterval(gameTimerInterval);gameTimerInterval=null;}
+      }
+
+      function clearGames(){
+        games.forEach(g=>g.clearTimers());
+        games=[];
+        const board=$('gameBoard');
+        board.innerHTML='';
+      }
+
+      function resetToBlank(){
+        stopRoundTimers();
+        roundRunning=false;
+        clearGames();
+        playerCount=Number($('playerSelect').value);
+        goal=Number($('goalSelect').value);
+        mode=$('modeSelect').value;
+        roundSeconds=Number($('timerSelect').value);
+        timeRemaining=roundSeconds;
+        const board=$('gameBoard');
+        board.dataset.count=String(playerCount);
+        board.style.setProperty('--players',playerCount);
+        setSettingsLocked(false);
+        updateMobileTip();
+        updateTimerDisplay();
+      }
+
+      function renderCountdown(n){
+        const board=$('gameBoard');
+        board.innerHTML=`<div class="countdown-screen" style="grid-column:1/-1"><div class="countdown-number" aria-live="assertive">${n}</div></div>`;
+        soundCount();
+      }
+
+      function beginCountdown(){
+        if(roundRunning||countdownInterval)return;
+        playerCount=Number($('playerSelect').value);
+        goal=Number($('goalSelect').value);
+        mode=$('modeSelect').value;
+        roundSeconds=Number($('timerSelect').value);
+        timeRemaining=roundSeconds;
+        stopRoundTimers();
+        clearGames();
+        const board=$('gameBoard');
+        board.dataset.count=String(playerCount);
+        board.style.setProperty('--players',playerCount);
+        setSettingsLocked(true);
+        updateMobileTip();
+        updateTimerDisplay();
+
+        let count=3;
+        renderCountdown(count);
+        countdownInterval=setInterval(()=>{
+          count--;
+          if(count>0){
+            renderCountdown(count);
+          }else{
+            clearInterval(countdownInterval);
+            countdownInterval=null;
+            startAll();
+          }
+        },1000);
+      }
+
+      function startGameClock(){
+        roundRunning=true;
+        timeRemaining=roundSeconds;
+        updateTimerDisplay();
+        gameTimerInterval=setInterval(()=>{
+          timeRemaining--;
+          updateTimerDisplay();
+          if(timeRemaining<=0){
+            clearInterval(gameTimerInterval);
+            gameTimerInterval=null;
+            endByTime();
+          }
+        },1000);
+      }
+
+      function endByTime(){
+        if(!roundRunning)return;
+        roundRunning=false;
+        timeRemaining=0;
+        updateTimerDisplay();
+        games.forEach(g=>g.timeUp());
+        soundTimeUp();
+        setSettingsLocked(false);
+      }
+
+      function checkAllFinished(){
+        if(!roundRunning||!games.length)return;
+        if(games.every(g=>g.phase==='done')){
+          roundRunning=false;
+          if(gameTimerInterval){clearInterval(gameTimerInterval);gameTimerInterval=null;}
+          updateTimerDisplay();
+          setSettingsLocked(false);
+        }
+      }
+
       $('playerSelect').addEventListener('change',e=>{playerCount=Number(e.target.value);updateMobileTip()});
       $('goalSelect').addEventListener('change',e=>{goal=Number(e.target.value)});
       $('modeSelect').addEventListener('change',e=>{mode=e.target.value});
-      bindFastTap($('startBtn'),startAll);
-      bindFastTap($('resetAllBtn'),startAll);
+      $('timerSelect').addEventListener('change',e=>{
+        roundSeconds=Number(e.target.value);
+        if(!roundRunning&&!countdownInterval){timeRemaining=roundSeconds;updateTimerDisplay();}
+      });
+      bindFastTap($('startBtn'),beginCountdown);
+      bindFastTap($('resetAllBtn'),resetToBlank);
 
       async function toggleFullscreen(){
         try{
@@ -925,6 +1101,26 @@
           },1000);
         }
 
+        timeUp(){
+          if(this.phase==='done'||this.phase==='timeup')return;
+          this.clearTimers();
+          this.locked=true;
+          this.setActiveInput(null);
+          this.phase='timeup';
+          this.panel.classList.add('time-up');
+          this.el('instruction').textContent='시간 종료!';
+          this.el('subhint').textContent='';
+          this.el('work').innerHTML=`
+            <div class="finish-view">
+              <div class="finish-emoji">⏰</div>
+              <div class="time-up-title">시간이 끝났어요!</div>
+              <div class="time-up-score">${this.solved} / ${this.goal}문제</div>
+            </div>`;
+          this.el('actions').innerHTML='';
+          this.setMessage('','');
+          this.updateProgress();
+        }
+
         finish(){
           this.clearTimers();
           this.locked=true;
@@ -936,30 +1132,25 @@
           this.el('work').innerHTML=`
             <div class="finish-view">
               <div class="finish-emoji">🎉</div>
-              <div class="finish-title">${this.index+1}번 완료!</div>
-              <div class="finish-text">${this.goal}문제를 모두 맞혔어요.<br>10을 만드는 방법을 잘 익혔어요.</div>
-              <button class="again-one" data-role="againOne">다시 하기</button>
+              <div class="finish-title">${this.index+1}번 목표 달성!</div>
+              <div class="finish-text">${this.goal}문제를 모두 맞혔어요.<br>남은 시간 동안 기다려 주세요.</div>
             </div>`;
           this.el('actions').innerHTML='';
           this.setMessage('','');
-          bindFastTap(this.el('work').querySelector('[data-role="againOne"]'),()=>{this.solved=0;this.newQuestion()});
           soundDone();
+          checkAllFinished();
         }
       }
 
       function startAll(){
-        mode=$('modeSelect').value;
-        playerCount=Number($('playerSelect').value);
-        goal=Number($('goalSelect').value);
-        games.forEach(g=>g.clearTimers());
-        games=[];
+        clearGames();
         const board=$('gameBoard');
-        board.innerHTML='';
         board.dataset.count=String(playerCount);
         board.style.setProperty('--players',playerCount);
         updateMobileTip();
         for(let i=0;i<playerCount;i++)games.push(new PlayerGame(i,mode,goal));
         soundStart();
+        startGameClock();
         if(window.innerWidth<650)board.scrollTo({left:0,behavior:'smooth'});
       }
 
@@ -970,7 +1161,7 @@
         });
       });
 
-      startAll();
+      resetToBlank();
     })();
   </script>
 </body>
