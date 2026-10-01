@@ -661,6 +661,7 @@
           this.mode=mode;
           this.goal=goal;
           this.solved=0;
+          this.mistakes=0;
           this.locked=false;
           this.phase='start';
           this.q=null;
@@ -1025,7 +1026,7 @@
               requestAnimationFrame(()=>this.drawPairBracket());
               this.setActiveInput(answer);
             }else{
-              this.failAndRestart('10이 되지 않아요. 처음 문제부터 다시 시작해요.');
+              this.failAndRestart('10이 되지 않아요.');
             }
           }
         }
@@ -1080,21 +1081,73 @@
             }
           }else{
             ans.classList.add('bad');
-            this.failAndRestart('틀렸어요. 처음 문제부터 다시 시작해요.');
+            this.failAndRestart('답이 달라요.');
           }
         }
 
         failAndRestart(text){
-          if(this.phase==='failed')return;
+          if(this.phase==='failed'||this.phase==='done'||this.phase==='timeup')return;
+
+          this.mistakes++;
+          soundBad();
+          this.panel.classList.add('fail-flash');
+
+          /* 첫 번째 오답은 점수를 유지하고 같은 문제를 다시 풀게 합니다. */
+          if(this.mistakes===1){
+            this.locked=true;
+            this.setMessage('한 번은 괜찮아요! 다시 해보세요.  (오답 1 / 2)','bad');
+
+            this.later(()=>{
+              this.panel.classList.remove('fail-flash');
+              this.locked=false;
+
+              const work=this.el('work');
+
+              if(this.mode==='pair' && this.phase==='start'){
+                this.selected=[];
+                work.querySelectorAll('[data-role="pairNum"]').forEach(el=>{
+                  el.classList.remove('selected','bad');
+                });
+                this.setMessage('다시 10이 되는 두 수를 골라보세요.','info');
+                return;
+              }
+
+              if(this.mode==='carry' && this.phase==='start'){
+                const a=work.querySelector('[data-role="splitA"]');
+                const b=work.querySelector('[data-role="splitB"]');
+                [a,b].forEach(el=>{
+                  if(!el)return;
+                  el.value='';
+                  el.classList.remove('bad');
+                });
+                this.setMessage('다시 가르기를 해보세요.','info');
+                if(a)this.setActiveInput(a);
+                return;
+              }
+
+              if(this.phase==='answer'){
+                const ans=work.querySelector('[data-role="finalAnswer"]');
+                if(ans){
+                  ans.value='';
+                  ans.classList.remove('bad');
+                  this.setActiveInput(ans);
+                }
+                this.setMessage('답을 다시 계산해보세요.','info');
+              }
+            },650);
+            return;
+          }
+
+          /* 두 번째 오답에서는 현재 점수를 0점으로 되돌리고 새 문제로 시작합니다. */
           this.phase='failed';
           this.locked=true;
           this.setActiveInput(null);
-          soundBad();
-          this.panel.classList.add('fail-flash');
-          this.setMessage(text,'bad');
+          this.setMessage('두 번째 오답이에요. 점수가 0점으로 돌아갑니다.','bad');
           this.el('actions').querySelectorAll('button').forEach(b=>b.disabled=true);
+
           this.later(()=>{
             this.solved=0;
+            this.mistakes=0;
             this.panel.classList.remove('fail-flash');
             this.updateProgress();
             this.newQuestion();
