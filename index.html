@@ -6,7 +6,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f6f8fc" />
-  <title>10의 짝꿍수 덧셈 - 전자칠판용</title>
+  <title>10의 짝꿍수 덧셈·뺄셈 - 전자칠판용</title>
   <style>
     :root{
       --bg:#f5f7fb;
@@ -40,7 +40,7 @@
     .setting-group{display:flex;align-items:center;gap:4px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:5px}
     .setting-label{font-size:12px;font-weight:900;color:#475467;padding:0 3px;white-space:nowrap}
     .mode-select,.setting-select{border:0;background:#fff;color:#344054;border-radius:9px;padding:8px 10px;font-weight:900;outline:none}
-    .mode-select{max-width:210px}
+    .mode-select{max-width:270px}
     .setting-select{min-width:82px}
     .start-btn,.reset-all-btn,.fullscreen-btn{border:0;border-radius:11px;padding:10px 14px;min-height:48px;font-weight:900;cursor:pointer;white-space:nowrap;touch-action:manipulation}
     .start-btn{background:var(--blue);color:#fff;box-shadow:0 4px 0 #1d4ed8}
@@ -267,6 +267,24 @@
     .message.bad{color:var(--red)}
     .message.info{color:var(--blue)}
 
+
+    /* 뺄셈 1·2 공통 단계 표시 */
+    .subtraction-work .split-area{min-height:142px}
+    .sub-step-line{
+      width:min(100%,320px);margin:5px auto 0;padding:5px 7px;
+      display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;
+      border:2px solid #dbe3ee;border-radius:10px;background:#f8fafc;
+      color:#334155;font-size:clamp(11px,1.15vw,15px);font-weight:1000;line-height:1.2;
+      position:relative;z-index:6;
+    }
+    .step-arrow{color:#2563eb;font-size:16px;font-weight:1000}
+    .buddy-chip{display:inline-grid;place-items:center;min-width:25px;height:25px;padding:0 6px;border:2px solid #16a34a;border-radius:99px;background:#ecfdf3;color:#15803d;font-weight:1000}
+    .buddy-question{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+    .buddy-answer-input{width:52px;height:42px;border:3px solid #16a34a;border-radius:10px;background:#f0fdf4;color:#166534;text-align:center;font-size:24px;font-weight:1000;outline:none}
+    .buddy-answer-input:focus,.buddy-answer-input.keypad-active{box-shadow:0 0 0 4px rgba(22,163,74,.16);border-color:#15803d}
+    .buddy-label{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:9px;background:#ecfdf3;color:#15803d;border:2px solid #86efac;font-size:11px;font-weight:1000}
+    .buddy-plus-step{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+
     .finish-view{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px 8px}
     .finish-emoji{font-size:clamp(48px,6vw,76px)}
     .finish-title{font-size:clamp(20px,2.4vw,30px);font-weight:1000;margin:8px 0 4px}
@@ -365,7 +383,7 @@
   <main class="app">
     <header class="topbar">
       <div class="brand">
-        <h1>10의 짝꿍수 덧셈 · 전자칠판용</h1>
+        <h1>10의 짝꿍수 덧셈·뺄셈 · 전자칠판용</h1>
         <p>4명이 함께 1분 동안 도전해요. 시작 후 3초 뒤에 문제가 나타납니다.</p>
       </div>
 
@@ -373,8 +391,10 @@
         <div class="setting-group">
           <span class="setting-label">학습</span>
           <select class="mode-select" id="modeSelect" aria-label="학습 유형">
-            <option value="pair" selected>① 세 수에서 10 만들기</option>
-            <option value="carry">② 받아올림 덧셈</option>
+            <option value="pair" selected>덧셈 ① 세 수에서 10 만들기</option>
+            <option value="carry">덧셈 ② 받아올림 덧셈</option>
+            <option value="sub1">뺄셈 1 — 빼는 수 가르기</option>
+            <option value="sub2">뺄셈 2 — 앞의 수 가르기</option>
           </select>
         </div>
 
@@ -773,12 +793,14 @@
           /* 가르기 칸은 한 자리입니다.
              첫 칸을 입력하면 두 번째 칸으로 자동 이동하고,
              두 번째 칸까지 입력되면 별도 확인 버튼 없이 즉시 자동 확인합니다. */
-          if(input.dataset.role==='splitA' && input.value.length>=1){
+          if(input.dataset.role==='splitA' && input.value.length>=maxLen){
             const next=this.el('work').querySelector('[data-role="splitB"]');
             if(next && !next.classList.contains('hidden'))this.setActiveInput(next);
           }else if(input.dataset.role==='splitB' && /^\d$/.test(key) && input.value.length>=1){
             const first=this.el('work').querySelector('[data-role="splitA"]');
             if(first && first.value.trim()!=='') this.checkSplit();
+          }else if(input.dataset.role==='buddyAnswer' && /^\d$/.test(key) && input.value.length>=1){
+            this.checkSub2Buddy();
           }
         }
 
@@ -806,6 +828,8 @@
           this.updateProgress();
           this.setMessage('');
           if(this.mode==='carry') this.makeCarry();
+          else if(this.mode==='sub1') this.makeSub1();
+          else if(this.mode==='sub2') this.makeSub2();
           else this.makePair();
         }
 
@@ -871,8 +895,9 @@
           const svg=work.querySelector('[data-role="splitSvg"]');
           const second=work.querySelector('[data-role="secondToken"]');
           const first=work.querySelector('[data-role="firstToken"]');
-          const aRef=work.querySelector(this.phase==='answer'?'[data-role="splitAValue"]':'[data-role="splitA"]');
-          const bRef=work.querySelector(this.phase==='answer'?'[data-role="splitBValue"]':'[data-role="splitB"]');
+          const useSplitInputs=this.phase==='start';
+          const aRef=work.querySelector(useSplitInputs?'[data-role="splitA"]':'[data-role="splitAValue"]');
+          const bRef=work.querySelector(useSplitInputs?'[data-role="splitB"]':'[data-role="splitBValue"]');
           if(!area||!svg||!second||!first||!aRef||!bRef)return;
 
           const ar=area.getBoundingClientRect();
@@ -924,14 +949,43 @@
             return;
           }
           const a=Number(aRaw), b=Number(bRaw);
-          if(a===this.q.complement && b===this.q.rest && a+b===this.q.second){
-            this.locked=true;
-            aEl.classList.add('good');bEl.classList.add('good');
-            soundGood();
-            this.showSplitResult();
-          }else{
-            aEl.classList.add('bad');bEl.classList.add('bad');
-            this.failAndRestart(`${this.q.first}의 10짝꿍수를 다시 생각해 보세요.`);
+
+          if(this.mode==='carry'){
+            if(a===this.q.complement && b===this.q.rest && a+b===this.q.second){
+              this.locked=true;
+              aEl.classList.add('good');bEl.classList.add('good');
+              soundGood();
+              this.showSplitResult();
+            }else{
+              aEl.classList.add('bad');bEl.classList.add('bad');
+              this.failAndRestart(`${this.q.first}의 10짝꿍수를 다시 생각해 보세요.`);
+            }
+            return;
+          }
+
+          if(this.mode==='sub1'){
+            if(a===this.q.ones && b===this.q.rest && a+b===this.q.subtrahend){
+              this.locked=true;
+              aEl.classList.add('good');bEl.classList.add('good');
+              soundGood();
+              this.showSubResult();
+            }else{
+              aEl.classList.add('bad');bEl.classList.add('bad');
+              this.failAndRestart(`${this.q.subtrahend}를 ${this.q.ones}와 ${this.q.rest}로 가르는 방법을 다시 생각해 보세요.`);
+            }
+            return;
+          }
+
+          if(this.mode==='sub2'){
+            if(a===10 && b===this.q.ones && a+b===this.q.minuend){
+              this.locked=true;
+              aEl.classList.add('good');bEl.classList.add('good');
+              soundGood();
+              this.showSubResult();
+            }else{
+              aEl.classList.add('bad');bEl.classList.add('bad');
+              this.failAndRestart(`${this.q.minuend}를 10과 ${this.q.ones}로 가르는 방법을 다시 생각해 보세요.`);
+            }
           }
         }
 
@@ -962,6 +1016,240 @@
           this.setMessage(`${this.q.second}는 흔적만 남기고, ${this.q.complement}와 ${this.q.rest}(으)로 갈랐어요. ${this.q.first}와 ${this.q.complement}가 10의 짝꿍이에요.`, 'good');
           this.locked=false;
           requestAnimationFrame(()=>this.drawCarryGuide());
+          this.setActiveInput(answer);
+        }
+
+        /* ---------- 뺄셈 1 : 빼는 수 가르기 ---------- */
+        makeSub1(){
+          const minuend=rand(11,18);
+          const ones=minuend-10;
+          const subtrahend=rand(ones+1,9);
+          const rest=subtrahend-ones;
+          const answer=minuend-subtrahend;
+          this.q={kind:'sub1',minuend,ones,subtrahend,rest,answer};
+
+          this.el('instruction').innerHTML=`문제 ${this.solved+1} · <strong>뺄셈 1 · ${minuend} - ${subtrahend}</strong>`;
+          this.el('subhint').textContent=`${subtrahend}를 가른 뒤, 먼저 ${minuend}에서 ${ones}을 빼서 10을 만들어요.`;
+          this.el('work').innerHTML=`
+            <div class="carry-work subtraction-work" data-role="subWork">
+              <div class="fixed-equation" data-role="subEq">
+                <div class="token first" data-role="firstToken">${minuend}</div>
+                <div class="eq-symbol">−</div>
+                <div class="token second" data-role="secondToken">${subtrahend}</div>
+                <div class="eq-symbol">=</div>
+                <input class="answer-input" data-role="finalAnswer" inputmode="numeric" pattern="[0-9]*" aria-label="최종 답" disabled>
+              </div>
+              <div class="split-area" data-role="splitArea">
+                <svg class="split-svg" data-role="splitSvg" aria-hidden="true"></svg>
+                <div class="split-title">${subtrahend}를 두 수로 가르세요.</div>
+                <div class="split-row">
+                  <div class="split-item">
+                    <div class="split-label complement-label">${minuend}에서 먼저 뺄 수</div>
+                    <input class="split-input" data-role="splitA" inputmode="numeric" pattern="[0-9]*" aria-label="먼저 뺄 수">
+                    <div class="split-value complement hidden" data-role="splitAValue"></div>
+                  </div>
+                  <div class="split-item">
+                    <div class="split-label">남는 수</div>
+                    <input class="split-input" data-role="splitB" inputmode="numeric" pattern="[0-9]*" aria-label="남는 수">
+                    <div class="split-value rest hidden" data-role="splitBValue"></div>
+                  </div>
+                </div>
+                <div class="sub-step-line hidden" data-role="subStep"></div>
+              </div>
+            </div>`;
+
+          this.el('actions').innerHTML='';
+          this.el('actions').classList.add('hidden');
+          const work=this.el('work');
+          const a=work.querySelector('[data-role="splitA"]');
+          const b=work.querySelector('[data-role="splitB"]');
+          const finalAnswer=work.querySelector('[data-role="finalAnswer"]');
+          this.bindNumericInput(a,1);
+          this.bindNumericInput(b,1);
+          this.bindNumericInput(finalAnswer,2);
+          finalAnswer.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkFinal()});
+          a.addEventListener('keydown',e=>{if(e.key==='Enter')b.focus()});
+          b.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkSplit()});
+          requestAnimationFrame(()=>this.drawSubGuide());
+          this.setActiveInput(a);
+        }
+
+        /* ---------- 뺄셈 2 : 앞의 수를 10과 나머지로 가르기 ---------- */
+        makeSub2(){
+          const minuend=rand(11,18);
+          const ones=minuend-10;
+          const subtrahend=rand(ones+1,9);
+          const buddy=10-subtrahend;
+          const answer=minuend-subtrahend;
+          this.q={kind:'sub2',minuend,ones,subtrahend,buddy,answer};
+
+          this.el('instruction').innerHTML=`문제 ${this.solved+1} · <strong>뺄셈 2 · ${minuend} - ${subtrahend}</strong>`;
+          this.el('subhint').textContent=`${minuend}를 10과 ${ones}로 가른 뒤, ${subtrahend}의 10짝꿍수를 직접 구하고 남는 수 ${ones}와 더해요.`;
+          this.el('work').innerHTML=`
+            <div class="carry-work subtraction-work" data-role="subWork">
+              <div class="fixed-equation" data-role="subEq">
+                <div class="token first" data-role="firstToken">${minuend}</div>
+                <div class="eq-symbol">−</div>
+                <div class="token second" data-role="secondToken">${subtrahend}</div>
+                <div class="eq-symbol">=</div>
+                <input class="answer-input" data-role="finalAnswer" inputmode="numeric" pattern="[0-9]*" aria-label="최종 답" disabled>
+              </div>
+              <div class="split-area" data-role="splitArea">
+                <svg class="split-svg" data-role="splitSvg" aria-hidden="true"></svg>
+                <div class="split-title">${minuend}를 10과 나머지로 가르세요.</div>
+                <div class="split-row">
+                  <div class="split-item">
+                    <div class="split-label complement-label">10</div>
+                    <input class="split-input" data-role="splitA" inputmode="numeric" pattern="[0-9]*" aria-label="10">
+                    <div class="split-value complement hidden" data-role="splitAValue"></div>
+                  </div>
+                  <div class="split-item">
+                    <div class="split-label">남는 수</div>
+                    <input class="split-input" data-role="splitB" inputmode="numeric" pattern="[0-9]*" aria-label="남는 수">
+                    <div class="split-value rest hidden" data-role="splitBValue"></div>
+                  </div>
+                </div>
+                <div class="sub-step-line hidden" data-role="subStep"></div>
+              </div>
+            </div>`;
+
+          this.el('actions').innerHTML='';
+          this.el('actions').classList.add('hidden');
+          const work=this.el('work');
+          const a=work.querySelector('[data-role="splitA"]');
+          const b=work.querySelector('[data-role="splitB"]');
+          const finalAnswer=work.querySelector('[data-role="finalAnswer"]');
+          this.bindNumericInput(a,2);
+          this.bindNumericInput(b,1);
+          this.bindNumericInput(finalAnswer,2);
+          finalAnswer.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkFinal()});
+          a.addEventListener('keydown',e=>{if(e.key==='Enter')b.focus()});
+          b.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkSplit()});
+          requestAnimationFrame(()=>this.drawSubGuide());
+          this.setActiveInput(a);
+        }
+
+        drawSubGuide(){
+          if(this.mode!=='sub1'&&this.mode!=='sub2')return;
+          const work=this.el('work');
+          const area=work.querySelector('[data-role="splitArea"]');
+          const svg=work.querySelector('[data-role="splitSvg"]');
+          const target=work.querySelector(this.mode==='sub1'?'[data-role="secondToken"]':'[data-role="firstToken"]');
+          const useSplitInputs=this.phase==='start';
+          const aRef=work.querySelector(useSplitInputs?'[data-role="splitA"]':'[data-role="splitAValue"]');
+          const bRef=work.querySelector(useSplitInputs?'[data-role="splitB"]':'[data-role="splitBValue"]');
+          if(!area||!svg||!target||!aRef||!bRef)return;
+
+          const ar=area.getBoundingClientRect();
+          const tr=target.getBoundingClientRect();
+          const rrA=aRef.getBoundingClientRect();
+          const rrB=bRef.getBoundingClientRect();
+          if(!ar.width||!rrA.width)return;
+
+          const sx=tr.left-ar.left+tr.width/2;
+          const sy=tr.bottom-ar.top+2;
+          const ax=rrA.left-ar.left+rrA.width/2;
+          const ay=rrA.top-ar.top-7;
+          const bx=rrB.left-ar.left+rrB.width/2;
+          const by=rrB.top-ar.top-7;
+          const mid=sy+12;
+
+          svg.setAttribute('viewBox',`0 0 ${ar.width} ${ar.height}`);
+          svg.innerHTML=`
+            <path d="M ${sx} ${sy} L ${sx} ${mid}" fill="none" stroke="#64748b" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M ${sx} ${mid} Q ${sx-4} ${mid+12} ${ax} ${ay}" fill="none" stroke="#64748b" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M ${sx} ${mid} Q ${sx+4} ${mid+12} ${bx} ${by}" fill="none" stroke="#64748b" stroke-width="3.5" stroke-linecap="round"/>`;
+        }
+
+        showSubResult(){
+          const work=this.el('work');
+          const aInput=work.querySelector('[data-role="splitA"]');
+          const bInput=work.querySelector('[data-role="splitB"]');
+          const aValue=work.querySelector('[data-role="splitAValue"]');
+          const bValue=work.querySelector('[data-role="splitBValue"]');
+          const answer=work.querySelector('[data-role="finalAnswer"]');
+          const step=work.querySelector('[data-role="subStep"]');
+          const target=work.querySelector(this.mode==='sub1'?'[data-role="secondToken"]':'[data-role="firstToken"]');
+
+          target.classList.add('trace');
+          aInput.classList.add('hidden');
+          bInput.classList.add('hidden');
+          aValue.classList.remove('hidden');
+          bValue.classList.remove('hidden');
+          step.classList.remove('hidden');
+
+          if(this.mode==='sub1'){
+            this.phase='answer';
+            aValue.textContent=this.q.ones;
+            bValue.textContent=this.q.rest;
+            step.innerHTML=`<span>${this.q.minuend} − ${this.q.ones} = <strong>10</strong></span><span class="step-arrow">→</span><span>10 − ${this.q.rest} = ?</span>`;
+            this.setMessage(`${this.q.subtrahend}를 ${this.q.ones}와 ${this.q.rest}로 갈랐어요. 먼저 10을 만들고 남은 수를 빼요.`,'good');
+            answer.disabled=false;
+            this.el('actions').classList.remove('hidden');
+            this.el('actions').innerHTML=`<button class="action-btn" data-role="checkAnswer">정답 확인</button>`;
+            bindFastTap(this.el('actions').querySelector('[data-role="checkAnswer"]'),()=>this.checkFinal());
+            this.locked=false;
+            requestAnimationFrame(()=>this.drawSubGuide());
+            this.setActiveInput(answer);
+            return;
+          }
+
+          /* 뺄셈 2는 앞 수를 10과 나머지로 가른 뒤,
+             곧바로 답을 보여주지 않고 빼는 수의 10짝꿍수를 학생이 직접 구하게 합니다. */
+          this.phase='buddy';
+          aValue.textContent=10;
+          bValue.textContent=this.q.ones;
+          answer.disabled=true;
+          step.innerHTML=`
+            <span class="buddy-question">10 − ${this.q.subtrahend} =
+              <input class="buddy-answer-input" data-role="buddyAnswer" inputmode="numeric" pattern="[0-9]*" aria-label="${this.q.subtrahend}의 10짝꿍수">
+            </span>
+            <span class="buddy-label">${this.q.subtrahend}의 10짝꿍수 먼저 구하기</span>`;
+          this.el('actions').innerHTML='';
+          this.el('actions').classList.add('hidden');
+          this.setMessage(`먼저 ${this.q.subtrahend}의 10짝꿍수를 구하세요. 그 다음 남는 수 ${this.q.ones}와 더할 거예요.`,'info');
+          this.locked=false;
+          const buddyInput=step.querySelector('[data-role="buddyAnswer"]');
+          this.bindNumericInput(buddyInput,1);
+          buddyInput.addEventListener('keydown',e=>{if(e.key==='Enter')this.checkSub2Buddy()});
+          requestAnimationFrame(()=>this.drawSubGuide());
+          this.setActiveInput(buddyInput);
+        }
+
+        checkSub2Buddy(){
+          if(this.locked||this.mode!=='sub2'||this.phase!=='buddy')return;
+          const work=this.el('work');
+          const buddyInput=work.querySelector('[data-role="buddyAnswer"]');
+          if(!buddyInput)return;
+          const raw=buddyInput.value.trim();
+          if(raw===''){
+            this.setMessage(`${this.q.subtrahend}의 10짝꿍수를 입력해 주세요.`,'info');
+            return;
+          }
+
+          if(Number(raw)!==this.q.buddy){
+            buddyInput.classList.add('bad');
+            this.failAndRestart(`${this.q.subtrahend}의 10짝꿍수를 다시 생각해 보세요.`);
+            return;
+          }
+
+          this.locked=true;
+          buddyInput.classList.add('good');
+          soundGood();
+
+          const step=work.querySelector('[data-role="subStep"]');
+          const answer=work.querySelector('[data-role="finalAnswer"]');
+          this.phase='answer';
+          step.innerHTML=`
+            <span>10 − ${this.q.subtrahend} = <span class="buddy-chip">${this.q.buddy}</span></span>
+            <span class="step-arrow">→</span>
+            <span class="buddy-plus-step"><span class="buddy-chip">${this.q.ones}</span> + <span class="buddy-chip">${this.q.buddy}</span> = ?</span>`;
+          answer.disabled=false;
+          this.el('actions').classList.remove('hidden');
+          this.el('actions').innerHTML=`<button class="action-btn" data-role="checkAnswer">정답 확인</button>`;
+          bindFastTap(this.el('actions').querySelector('[data-role="checkAnswer"]'),()=>this.checkFinal());
+          this.setMessage(`맞아요! ${this.q.subtrahend}의 10짝꿍수는 ${this.q.buddy}예요. 이제 남는 수 ${this.q.ones}와 ${this.q.buddy}를 더하세요.`,'good');
+          this.locked=false;
           this.setActiveInput(answer);
         }
 
@@ -1120,7 +1408,7 @@
                 return;
               }
 
-              if(this.mode==='carry' && this.phase==='start'){
+              if((this.mode==='carry'||this.mode==='sub1'||this.mode==='sub2') && this.phase==='start'){
                 const a=work.querySelector('[data-role="splitA"]');
                 const b=work.querySelector('[data-role="splitB"]');
                 [a,b].forEach(el=>{
@@ -1130,6 +1418,17 @@
                 });
                 this.setMessage('다시 두 수를 입력해보세요. 두 번째 수까지 넣으면 자동 확인돼요.','info');
                 if(a)this.setActiveInput(a);
+                return;
+              }
+
+              if(this.mode==='sub2' && this.phase==='buddy'){
+                const buddy=work.querySelector('[data-role="buddyAnswer"]');
+                if(buddy){
+                  buddy.value='';
+                  buddy.classList.remove('bad');
+                  this.setActiveInput(buddy);
+                }
+                this.setMessage(`${this.q.subtrahend}의 10짝꿍수를 다시 구해보세요.`,'info');
                 return;
               }
 
@@ -1218,6 +1517,7 @@
       window.addEventListener('resize',()=>{
         games.forEach(g=>{
           if(g.mode==='carry')g.drawCarryGuide();
+          if(g.mode==='sub1'||g.mode==='sub2')g.drawSubGuide();
           if(g.mode==='pair')g.drawPairBracket();
         });
       });
